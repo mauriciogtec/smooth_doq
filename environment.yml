@@ -1,0 +1,20 @@
+name: sdoq
+channels:
+- defaults
+- conda-forge
+dependencies:
+    - python=3.7
+    - matplotlib
+    - scipy
+    - ujson
+    - nb_conda_kernels
+    - jupyterlab
+    - cudatoolkit=10.1
+    - tensorflow-gpu=2.1
+    - pip
+    - black
+    - flake8
+    - tqdm
+    - pip:
+        - "git+httpsL//github.com/facebookresearch/hydra"
+        - "git+https://git@github.com/shagunsodhani/ml-logger.git@master#egg=ml_logger[all]"

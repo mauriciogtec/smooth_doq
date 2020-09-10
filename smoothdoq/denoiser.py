@@ -30,36 +30,43 @@ class ResBlock1D(models.Model):
         self.act = layers.Activation(activation)
 
         # block 1
-        self.ln1 = MaskedLayerNorm()
+        # self.ln1 = MaskedLayerNorm()
+        self.ln1 = tf.keras.layers.LayerNormalization()
         self.conv1 = layers.Conv1D(
             filters // 4, 1, padding="same", use_bias=False,
         )
 
         # block 2
-        self.ln2 = MaskedLayerNorm()
-        self.conv2 = tf.keras.layers.Conv1D(
-            filters // 4,
-            kernel_size,
-            dilation_rate=dilation_rate,
-            padding="same",
-            use_bias=False,
-        )
+        # self.ln2 = MaskedLayerNorm()
+        self.ln2 = tf.keras.layers.LayerNormalization()
+        self.conv2 = []
+        for i in range(4):
+            self.conv2.append(
+                tf.keras.layers.Conv1D(
+                    filters // 4,
+                    kernel_size + i * 2,
+                    dilation_rate=dilation_rate,
+                    padding="same",
+                    use_bias=False,
+                )
+            )
 
         # block 3
-        self.ln3 = MaskedLayerNorm()
+        # self.ln3 = MaskedLayerNorm()
+        self.ln3 = tf.keras.layers.LayerNormalization()
         self.conv3 = tf.keras.layers.Conv1D(
             filters, 1, padding="same", use_bias=False,
         )
 
-    def call(self, inputs, N=None, training=None) -> Tensor:
+    def call(self, inputs, training=None) -> Tensor:
         x = inputs
-        x = self.ln1(x, training=training, N=N)
+        x = self.ln1(x, training=training)
         x = self.act(x)
         x = self.conv1(x)
-        x = self.ln2(x, training=training, N=N)
+        x = self.ln2(x, training=training)
         x = self.act(x)
-        x = self.conv2(x)
-        x = self.ln3(x, training=training, N=N)
+        x = tf.concat([layer(x) for layer in self.conv2], -1)
+        x = self.ln3(x, training=training)
         x = self.act(x)
         x = self.conv3(x)
         return inputs + x
@@ -125,11 +132,12 @@ class BinDenoiser(models.Model):
         mask: Optional[Tensor] = None,
         training: Optional[bool] = None,
     ) -> Tensor:
-        N = None if mask is None else tf.reduce_sum(mask, 1)
+        # N = None if mask is None else tf.reduce_sum(mask, 1)
         x = tf.expand_dims(inputs, -1)
         x = tf.concat([layer(x) for layer in self.conv0_list], -1)
         for block in self.blocks:
-            x = block(x, N=N, training=training)
+            # N = None
+            x = block(x, training=training)
         if training and self.dropout > 0.0:
             R = tf.random.uniform((x.shape[0], 1, x.shape[2]))
             R = tf.cast(R < self.dropout, tf.float32)

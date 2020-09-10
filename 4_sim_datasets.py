@@ -56,7 +56,7 @@ def add_noise(
     return d, noise_profile
 
 
-@hydra.main(config_name="sim_datasets_config")
+@hydra.main(config_name="sim_datasets_config.yml")
 def main(cfg: DictConfig):
     np.random.seed(cfg.seed)
     buffer = deque(maxlen=cfg.batch_size)
