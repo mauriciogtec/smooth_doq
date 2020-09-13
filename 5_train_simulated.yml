@@ -5,7 +5,7 @@ env_block_size: 16  # important for irm
 plot_every: 100
 clipnorm: 3.0
 init_lr: 3e-4
-min_lr: 1e-4
+min_lr: 3e-5
 half_lr: 50  # before 10
 max_reg: 1e-1
 half_reg: 25
