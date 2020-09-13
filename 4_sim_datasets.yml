@@ -1,12 +1,13 @@
-n_records: 10_000
+n_records: 20_000
 batch_size: 128
-seed: 215233    
+env_block_size: 16  # important for irm
+seed: 215233
 config_name: debug
 
 base_distrib: normal  # normal, exponential
 n_bins: [16, 401]
 n_bins_multiple_of: 16  # useful since dilation otherwise can fail
-n_obs: [100, 10_000]
+n_obs: [200, 10_000]
 window_size: [0.5, 1.0]
 loc: [0., 1.0]  # relative to support
 scale: [0.01, 0.99]  # relative to support

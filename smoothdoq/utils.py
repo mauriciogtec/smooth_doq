@@ -1,4 +1,6 @@
 import tensorflow as tf
+import numpy as np
+import random
 from tensorflow.keras import layers, initializers, regularizers, constraints
 
 
@@ -68,17 +70,18 @@ class MaskedLayerNorm(layers.Layer):
             )
         super(MaskedLayerNorm, self).build(input_shape)
 
-    def call(self, x, N=None, training=None):
+    def call(self, x, dim=-1, N=None, training=None):
         # if N is none then it is jsut the number of cols
         if N is None:
-            N = tf.cast(tf.shape(x), tf.float32)[1]
+            N = tf.cast(tf.shape(x), tf.float32)[dim]
 
         # prepare for broadcasting
         if len(N.shape) == 1:
-            N = tf.reshape(N, (x.shape[0], 1, 1))
+            batch_size = x.shape[0]
+            N = tf.reshape(N, (batch_size, 1, 1))
 
-        mean = tf.reduce_sum(x, 1, keepdims=True) / N
-        sumsq = tf.reduce_sum((x - mean) ** 2, 1, keepdims=True)
+        mean = tf.reduce_sum(x, dim, keepdims=True) / N
+        sumsq = tf.reduce_sum((x - mean) ** 2, dim, keepdims=True)
         std = tf.math.sqrt(sumsq / (N - 1.0)) + self.epsilon
         outputs = (x - mean) / std
         if self.scale:
@@ -86,3 +89,9 @@ class MaskedLayerNorm(layers.Layer):
         if self.center:
             outputs += self.beta
         return outputs
+
+
+def set_seed_everywhere(seed: int) -> None:
+    tf.random.set_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)

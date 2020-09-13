@@ -1,0 +1,28 @@
+epochs: 200
+ckpt_every: 50
+batch_size: 64
+env_block_size: 16  # important for irm
+plot_every: 100
+clipnorm: 3.0
+init_lr: 3e-4
+min_lr: 1e-4
+half_lr: 50  # before 10
+max_reg: 1e-1
+half_reg: 25
+irm_rel_wt: 1.0
+tv_rel_wt: 1.0
+seed: 1498163
+tv_order: 2
+huber_k: 2.0
+reg_warmup: 5
+train_dirs: [normal]
+ood_dirs: [expon_mix]
+logdir: test
+
+hydra:
+    run:
+        dir: "."
+    job_logging:
+        formatters:
+            simple:
+                format: '%(message)s'

@@ -1,21 +1,21 @@
 import os
 import numpy as np
 from collections import deque
-from functools import partial
 import smoothdoq.binned as bd
 import smoothdoq.noise as nm
+from smoothdoq import utils
 import hydra
-import math
 from omegaconf import DictConfig
 import ujson
 from tqdm import tqdm
 
 
 def make_distrib(cfg: DictConfig, n_bins: int) -> bd.BinnedDistribution:
-    loc_rel = np.random.uniform(*cfg.loc)
-    scale_rel = np.exp(np.random.uniform(*np.log(cfg.scale)))
-    loc = np.array([loc_rel * (n_bins - 1)])
-    scale = np.array([max(cfg.min_scale, scale_rel * (n_bins - 1))])
+    B = cfg.env_block_size
+    loc_rel = np.random.uniform(*cfg.loc, size=B)
+    scale_rel = np.exp(np.random.uniform(*np.log(cfg.scale), size=B))
+    loc = loc_rel * (n_bins - 1)
+    scale = np.maximum(cfg.min_scale, scale_rel * (n_bins - 1))
 
     if cfg.base_distrib == "exponential":
         base_distrib = bd.BinnedExponential(n_bins, loc, scale)
@@ -56,16 +56,17 @@ def add_noise(
     return d, noise_profile
 
 
-@hydra.main(config_name="sim_datasets_config.yml")
+@hydra.main(config_name="4_sim_datasets.yml")
 def main(cfg: DictConfig):
-    np.random.seed(cfg.seed)
+    utils.set_seed_everywhere(cfg.seed)
     buffer = deque(maxlen=cfg.batch_size)
     savedir = "data/simulated/" + cfg.config_name
     os.makedirs(savedir, exist_ok=True)
 
     # current options for these script are
     # Gaussian, Exponential, Mixture Gaussian,
-    for i in tqdm(range(cfg.n_records)):
+    eid = 0
+    for i in tqdm(range(cfg.n_records // cfg.env_block_size)):
         M = cfg.n_bins_multiple_of
         n_bins = max(np.random.randint(*cfg.n_bins) // M, 1) * M
         window_size = np.random.uniform(*cfg.window_size)
@@ -82,45 +83,42 @@ def main(cfg: DictConfig):
 
         clean_distrib = bd.BinnedMixture(clean_distribs, weights)
         clean_pdf = bd.WindowedDistribution(
-            n_bins, clean_distrib, [window_start]
-        ).pdf()[0]
+            n_bins, clean_distrib, window_start
+        ).pdf()
         clean_pdf_comps = [
-            bd.WindowedDistribution(n_bins, d, [window_start]).pdf()[0]
+            bd.WindowedDistribution(n_bins, d, window_start).pdf()
             for d in clean_distribs
         ]
-
         distrib, profile = add_noise(clean_distrib, cfg)
-        distrib = bd.WindowedDistribution(
-            n_bins, distrib, starts=[window_start]
-        )
-
+        distrib = bd.WindowedDistribution(n_bins, distrib, window_start)
         n_samples = np.random.randint(*cfg.n_obs)
-        sample = distrib.sample(n_samples)[0]
+        sample = distrib.sample(n_samples)
 
-        record = dict(
-            n_samples=int(n_samples),
-            sample=[int(x) for x in sample],
-            base_distrib=cfg.base_distrib,
-            weights=[int(w) for w in weights],
-            pdf=clean_pdf.tolist(),
-            pdf_comps=[d.tolist() for d in clean_pdf_comps],
-            n_comps=int(n_comps),
-            n_bins=int(n_bins),
-            locs=[int(D.loc[0]) for D in clean_distribs],
-            scales=[int(D.scale[0]) for D in clean_distribs],
-            window_len=int(window_len),
-            window_start=int(window_start),
-            id=i,
-            **profile,
-        )
-        buffer.append(record)
-
-        if (i + 1) % cfg.batch_size == 0 or i == cfg.n_records - 1:
-            fname = (
-                f"{savedir}/{buffer[0]['id']:05d}-{buffer[-1]['id']:05d}.json"
+        for k in range(cfg.env_block_size):
+            record = dict(
+                n_samples=int(n_samples),
+                sample=[int(x) for x in sample[k]],
+                base_distrib=cfg.base_distrib,
+                weights=weights.tolist(),
+                pdf=clean_pdf[k].tolist(),
+                pdf_comps=[d[k].tolist() for d in clean_pdf_comps],
+                n_comps=int(n_comps),
+                n_bins=int(n_bins),
+                locs=[D.loc[k] for D in clean_distribs],
+                scales=[D.scale[k] for D in clean_distribs],
+                window_len=int(window_len),
+                window_start=int(window_start),
+                id=eid,
+                **profile,
             )
-            with open(fname, "w") as io:
-                ujson.dump(list(buffer), io)
+            buffer.append(record)
+
+            if (eid + 1) % cfg.batch_size == 0 or eid == cfg.n_records - 1:
+                fname = f"{savedir}/{buffer[0]['id']:05d}-{buffer[-1]['id']:05d}.json"
+                with open(fname, "w") as io:
+                    ujson.dump(list(buffer), io)
+
+            eid += 1
 
 
 if __name__ == "__main__":

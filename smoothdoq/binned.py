@@ -28,7 +28,7 @@ class BinnedNormal(BinnedDistribution):
     to the interval [1,...,n] and binned"""
 
     def __init__(self, n_bins: int, loc: ndarray, scale: ndarray) -> None:
-        assert all([0 <= l < n_bins for l in loc])
+        assert all([0 <= u < n_bins for u in loc])
         super().__init__(n_bins)
         self.loc = loc
         self.scale = scale
@@ -65,7 +65,7 @@ class BinnedExponential(BinnedDistribution):
     to the interval [1,...,n] and binned"""
 
     def __init__(self, n_bins: int, loc: ndarray, scale: ndarray) -> None:
-        assert all([0 <= l < n_bins for l in loc])
+        assert all([0 <= u < n_bins for u in loc])
         super().__init__(n_bins)
         self.loc = loc
         self.scale = scale
@@ -109,8 +109,9 @@ class BinnedMixture(BinnedDistribution):
     def sample(self, size: int = 1) -> ndarray:
         out = np.zeros((self.batch_size, self.n_bins), int)
         sample_sizes = np.random.multinomial(size, self.weights)
+
         for D, N in zip(self.distributions, sample_sizes):
-            out += D.sample(N)
+            out += D.sample(max(N, 1))
         return out
 
     def pdf(self) -> ndarray:
@@ -128,10 +129,15 @@ class WindowedDistribution(BinnedDistribution):
         self, n_bins: int, distribution: BinnedDistribution, starts: list = [0]
     ):
         super().__init__(n_bins)
-        assert [s + distribution.n_bins <= n_bins for s in starts]
         self.distribution = distribution
         self.batch_size = distribution.batch_size
-        self.starts = starts
+        if isinstance(starts, list) == 1:
+            assert len(starts) == self.batch_size
+            assert [s + distribution.n_bins <= n_bins for s in starts]
+            self.starts = starts
+        else:
+            assert starts + distribution.n_bins <= n_bins
+            self.starts = [starts] * self.batch_size
         self.window_size = distribution.n_bins
 
     def sample(self, size: int) -> ndarray:

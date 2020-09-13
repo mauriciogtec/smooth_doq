@@ -149,10 +149,11 @@ class BinDenoiser(models.Model):
 
 
 def masked_softmax(x: Tensor, mask: Tensor, axis: int = -1) -> Tensor:
-    eps = 1e-14
+    eps = 1e-12
+    x = x + eps
     C = tf.reduce_max(x * mask, axis, keepdims=True)
-    S = (tf.math.exp(x - C) + eps) * mask
-    S = S / (tf.reduce_sum(S, axis, keepdims=True) + eps)
+    S = tf.math.exp(x - C) * mask
+    S = S / tf.reduce_sum(S, axis, keepdims=True)
     return S
 
 
