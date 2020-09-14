@@ -5,11 +5,13 @@ import ujson
 import numpy as np
 import tensorflow as tf
 from smoothdoq import denoiser
-from tensorflow.keras.preprocessing.sequence import pad_sequences
 import matplotlib.pyplot as plt
 from ml_logger import logbook as ml_logbook
 import hydra
 from smoothdoq import utils
+
+
+pad_sequences = tf.keras.preprocessing.sequence
 
 
 def preprocess_batch(
