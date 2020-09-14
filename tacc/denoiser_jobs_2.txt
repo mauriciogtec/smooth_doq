@@ -1,0 +1,4 @@
+python ./5_train_simulated.py init_lr=1e-3 min_lr=1e-4
+python ./5_train_simulated.py init_lr=1e-3 min_lr=1e-5
+python ./5_train_simulated.py half_lr=25
+python ./5_train_simulated.py reg_warmup=25 max_reg=1.0 tv_rel_wt=0.0

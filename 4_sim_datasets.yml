@@ -1,8 +1,9 @@
 n_records: 20_000
-batch_size: 128
+batch_size: 512
 env_block_size: 16  # important for irm
 seed: 215233
 config_name: debug
+savedir: "data/simulated/"
 
 base_distrib: normal  # normal, exponential
 n_bins: [16, 401]

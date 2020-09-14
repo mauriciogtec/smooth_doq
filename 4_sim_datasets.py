@@ -60,7 +60,7 @@ def add_noise(
 def main(cfg: DictConfig):
     utils.set_seed_everywhere(cfg.seed)
     buffer = deque(maxlen=cfg.batch_size)
-    savedir = "data/simulated/" + cfg.config_name
+    savedir = cfg.savedir + cfg.config_name
     os.makedirs(savedir, exist_ok=True)
 
     # current options for these script are

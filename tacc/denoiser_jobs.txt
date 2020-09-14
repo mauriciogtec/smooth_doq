@@ -1,0 +1,11 @@
+python ./5_train_simulated.py hydra.run.dir=outputs/default
+python ./5_train_simulated.py train_dirs=[normal]
+python ./5_train_simulated.py max_reg=1e-1 tv_rel_wt=0.0
+python ./5_train_simulated.py max_reg=1e-2 tv_rel_wt=0.0
+python ./5_train_simulated.py max_reg=1e-3 tv_rel_wt=0.0
+python ./5_train_simulated.py max_reg=1e-1 irm_rel_wt=0.0
+python ./5_train_simulated.py max_reg=1e-2 irm_rel_wt=0.0
+python ./5_train_simulated.py max_reg=1e-2 huber_k=10 irm_rel_wt=0.0
+python ./5_train_simulated.py max_reg=1e-2 tv_order=2 irm_rel_wt=0.0
+python ./5_train_simulated.py max_reg=1e-3 irm_rel_wt=0.0
+python ./5_train_simulated.py clipnorm=100.0
