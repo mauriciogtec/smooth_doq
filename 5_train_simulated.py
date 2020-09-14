@@ -145,7 +145,7 @@ def main(cfg):
     utils.set_seed_everywhere(cfg.seed)
     plt.style.use("seaborn-colorblind")
     now = datetime.now().strftime("%d-%m-%Y/%H-%M-%S")
-    logdir = "./tflogs/" + (now if cfg.logdir is None else cfg.logdir)
+    logdir = "./" + (now if cfg.logdir is None else cfg.logdir)
     os.makedirs(logdir, exist_ok=True)
     os.makedirs(logdir + "/images", exist_ok=True)
     logbook_config = ml_logbook.make_config(
@@ -157,15 +157,16 @@ def main(cfg):
 
     data = []
     ood_data = []
+    wd = hydra.utils.get_original_cwd()
     for d in cfg.train_dirs:
-        for fn in glob(f"./data/simulated/{d}/*.json"):
+        for fn in glob(f"{wd}/data/simulated/{d}/*.json"):
             with open(fn, "r") as io:
                 batch = ujson.load(io)
                 for record in batch:
                     data.append(record)
 
     for d in cfg.ood_dirs:
-        for fn in glob(f"./data/simulated/{d}/*.json"):
+        for fn in glob(f"{wd}/data/simulated/{d}/*.json"):
             with open(fn, "r") as io:
                 batch = ujson.load(io)
                 for record in batch:
