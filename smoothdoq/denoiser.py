@@ -1,75 +1,15 @@
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import numpy as np
-from tensorflow.keras import activations, layers, models
-from tensorflow.keras.preprocessing.sequence import pad_sequences
-
-# local
-from smoothdoq.utils import MaskedLayerNorm
-
-# typing
 from tensorflow import Tensor
 from typing import Union, List, Optional
+from smoothdoq.layers import ResBlock1D
 
 
-class ResBlock1D(models.Model):
-    """Defines a residual block which takes as input
-    and output a 3d tensor of same dimensions
-    batch x values x channels"""
-
-    def __init__(
-        self,
-        kernel_size: int,
-        filters: int,
-        activation: str = "elu",
-        dilation_rate: int = 1,
-        **kwargs
-    ) -> None:
-        super(ResBlock1D, self).__init__(**kwargs)
-
-        self.act = layers.Activation(activation)
-
-        # block 1
-        # self.ln1 = MaskedLayerNorm()
-        self.ln1 = tf.keras.layers.LayerNormalization()
-        self.conv1 = layers.Conv1D(
-            filters // 4, 1, padding="same", use_bias=False,
-        )
-
-        # block 2
-        # self.ln2 = MaskedLayerNorm()
-        self.ln2 = tf.keras.layers.LayerNormalization()
-        self.conv2 = []
-        for i in range(4):
-            self.conv2.append(
-                tf.keras.layers.Conv1D(
-                    filters // 4,
-                    kernel_size + i * 2,
-                    dilation_rate=dilation_rate,
-                    padding="same",
-                    use_bias=False,
-                )
-            )
-
-        # block 3
-        # self.ln3 = MaskedLayerNorm()
-        self.ln3 = tf.keras.layers.LayerNormalization()
-        self.conv3 = tf.keras.layers.Conv1D(
-            filters, 1, padding="same", use_bias=False,
-        )
-
-    def call(self, inputs, training=None) -> Tensor:
-        x = inputs
-        x = self.ln1(x, training=training)
-        x = self.act(x)
-        x = self.conv1(x)
-        x = self.ln2(x, training=training)
-        x = self.act(x)
-        x = tf.concat([layer(x) for layer in self.conv2], -1)
-        x = self.ln3(x, training=training)
-        x = self.act(x)
-        x = self.conv3(x)
-        return inputs + x
+activations = tf.keras.activations
+layers = tf.keras.layers
+models = tf.keras.models
+sequence = tf.keras.preprocessing.sequence
 
 
 class BinDenoiser(models.Model):
@@ -158,7 +98,7 @@ def masked_softmax(x: Tensor, mask: Tensor, axis: int = -1) -> Tensor:
 
 
 def compute_mask(x: List[List], maxlen: Optional[int] = None) -> Tensor:
-    pad = pad_sequences(
+    pad = sequence.pad_sequences(
         x, value=-1.0, dtype="float", padding="post", maxlen=maxlen
     )
     return tf.cast(pad != -1, tf.float32)
