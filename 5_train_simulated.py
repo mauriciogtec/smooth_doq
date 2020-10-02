@@ -5,11 +5,13 @@ import ujson
 import numpy as np
 import tensorflow as tf
 from smoothdoq import denoiser
-from tensorflow.keras.preprocessing.sequence import pad_sequences
 import matplotlib.pyplot as plt
 from ml_logger import logbook as ml_logbook
 import hydra
 from smoothdoq import utils
+
+
+sequence = tf.keras.preprocessing.sequence
 
 
 def preprocess_batch(
@@ -48,8 +50,8 @@ def preprocess_batch(
             Dx.append(b["sample"])
             Dy.append(b["pdf"])
 
-    x = pad_sequences(Dx, dtype="float", padding="post", maxlen=400)
-    y = pad_sequences(Dy, dtype="float", padding="post", maxlen=400)
+    x = sequence.pad_sequences(Dx, dtype="float", padding="post", maxlen=400)
+    y = sequence.pad_sequences(Dy, dtype="float", padding="post", maxlen=400)
     mask = denoiser.compute_mask(Dx, maxlen=400)
     y = tf.constant(y, tf.float32)
     x = tf.constant(x, tf.float32)
@@ -225,7 +227,7 @@ def main(cfg):
                 g2 = tf.reduce_mean(g_e[1::2])
                 irm_loss += g1 * g2 + (0.5 * (g1 + g2))**2
             tv_reg = tvloss(logits_yhat, k=cfg.huber_k, order=cfg.tv_order)
-            logits_yhat = model(logits_x, training=training, mask=mask)
+            # logits_yhat = model(logits_x, training=training, mask=mask)
             yhat = denoiser.masked_softmax(logits_yhat, mask, -1)
             loss_vec = kld(yhat, y) + kld(y, yhat)
             loss = tf.reduce_mean(loss_vec)

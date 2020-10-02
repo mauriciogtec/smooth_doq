@@ -19,6 +19,7 @@ dependencies:
     - tensorflow-gpu=2.1
     - h5py=2.9.0
     - pip:
+        - tensorflow-addons
         - "git+https://git@github.com/facebookresearch/hydra@v1.0.0"
         - "git+https://git@github.com/shagunsodhani/ml-logger.git@master#egg=ml_logger[all]"
         - tensorflow-addons
