@@ -9,3 +9,15 @@ python ./5_train_simulated.py max_reg=1e-2 huber_k=10 irm_rel_wt=0.0
 python ./5_train_simulated.py max_reg=1e-2 tv_order=2 irm_rel_wt=0.0
 python ./5_train_simulated.py max_reg=1e-3 irm_rel_wt=0.0
 python ./5_train_simulated.py clipnorm=100.0
+python ./5_train_simulated.py init_lr=1e-3 min_lr=1e-4
+python ./5_train_simulated.py init_lr=1e-3 min_lr=1e-5
+python ./5_train_simulated.py half_lr=25
+python ./5_train_simulated.py reg_warmup=25 max_reg=1.0 tv_rel_wt=0.0
+python ./5_train_simulated.py train_dirs=[normal] max_reg=1e-2 tv_rel_wt=0.0
+python ./5_train_simulated.py train_dirs=[normal] max_reg=1e-1 tv_rel_wt=0.0
+python ./5_train_simulated.py train_dirs=[normal] init_lr=1e-3 min_lr=1e-5
+python ./5_train_simulated.py train_dirs=[normal] init_lr=1e-3 min_lr=1e-4
+python ./5_train_simulated.py train_dirs=[normal] init_lr=1e-3 min_lr=1e-5 tv_rel_wt=0.0 max_reg=1e-1
+python ./5_train_simulated.py train_dirs=[normal] init_lr=1e-3 min_lr=1e-5 tv_rel_wt=0.0 max_reg=1e-2
+python ./5_train_simulated.py train_dirs=[normal] init_lr=1e-3 min_lr=1e-5 tv_rel_wt=0.0 max_reg=1e-3
+python ./5_train_simulated.py train_dirs=[normal] init_lr=1e-3 min_lr=1e-5 max_reg=1e-3 

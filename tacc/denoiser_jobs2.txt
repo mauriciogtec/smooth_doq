@@ -1,0 +1,4 @@
+python ./5_train_simulated.py train_dirs=[normal] init_lr=1e-3 min_lr=1e-5 tv_rel_wt=0.0 max_reg=1e-1
+python ./5_train_simulated.py train_dirs=[normal] init_lr=1e-3 min_lr=1e-5 tv_rel_wt=0.0 max_reg=1e-2
+python ./5_train_simulated.py train_dirs=[normal] init_lr=1e-3 min_lr=1e-5 tv_rel_wt=0.0 max_reg=1e-3
+python ./5_train_simulated.py train_dirs=[normal] init_lr=1e-3 min_lr=1e-5 max_reg=1e-3 

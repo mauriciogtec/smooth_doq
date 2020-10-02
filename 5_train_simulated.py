@@ -220,10 +220,10 @@ def main(cfg):
             # irm loss
             g = tape2.jacobian(loss_vec, w_dummy)
             irm_loss = 0.0
-            for g_e in tf.split(g, envs):
+            for g_e in tf.split(g, envs, 0):
                 g1 = tf.reduce_mean(g_e[::2])
                 g2 = tf.reduce_mean(g_e[1::2])
-                irm_loss += g1 * g2 + 0.25 * (g1 + g2) ** 2
+                irm_loss += g1 * g2 + (0.5 * (g1 + g2))**2
             tv_reg = tvloss(logits_yhat, k=cfg.huber_k, order=cfg.tv_order)
             logits_yhat = model(logits_x, training=training, mask=mask)
             yhat = denoiser.masked_softmax(logits_yhat, mask, -1)
@@ -366,13 +366,10 @@ def main(cfg):
         loss_buff, test_loss_buff = [], []
         reg_buff, irm_buff = [], []
         ood_buff = []
-
+    
         model.save_weights(f"{logdir}/ckpt.h5")
-        if step + 1 % cfg.ckpt_every == 0:
-            model.save_weights(f"{logdir}/ckpt_{step + 1}.h5")
-
-    step += 1
-
+        if e + 1 % cfg.ckpt_every == 0:
+            model.save_weights(f"{logdir}/ckpt_{e + 1}.h5")
 
 if __name__ == "__main__":
     main()

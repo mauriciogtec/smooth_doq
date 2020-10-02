@@ -1,0 +1,4 @@
+python ./5_train_simulated.py init_lr=1e-3 min_lr=1e-5 half_lr=25
+python ./5_train_simulated.py init_lr=1e-3 min_lr=1e-5 half_lr=10
+python ./5_train_simulated.py init_lr=1e-3 min_lr=1e-5 half_lr=5
+python ./5_train_simulated.py init_lr=1e-3 min_lr=1e-6 half_lr=25
