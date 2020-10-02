@@ -1,5 +1,5 @@
 epochs: 150
-gen_filters: 16
+gen_filters: 64
 gen_norm_layers: True
 ensemble_size: 1
 ckpt_every: 50
