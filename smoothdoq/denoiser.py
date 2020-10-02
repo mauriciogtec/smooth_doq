@@ -97,6 +97,13 @@ def masked_softmax(x: Tensor, mask: Tensor, axis: int = -1) -> Tensor:
     return S
 
 
+def masked_add_to_one(x: Tensor, mask: Tensor, axis: int = -1) -> Tensor:
+    eps = 1e-12
+    x = x + eps
+    S = tf.reduce_sum(x * mask, axis, keepdims=True)
+    return (x * mask) / S
+
+
 def compute_mask(x: List[List], maxlen: Optional[int] = None) -> Tensor:
     pad = sequence.pad_sequences(
         x, value=-1.0, dtype="float", padding="post", maxlen=maxlen

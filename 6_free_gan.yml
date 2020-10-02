@@ -1,25 +1,32 @@
-epochs: 300
-ensemble_size: 2
+epochs: 150
+gen_filters: 16
+gen_norm_layers: True
+ensemble_size: 1
 ckpt_every: 50
 batch_size: 64
-env_block_size: 16  # important for irm
-plot_every: 100
+env_block_size: 32  # important for irm
+plot_every: 50
 clipnorm: 3.0
-init_lr: 3e-4
+init_lr: 2e-4
+smooth_lr_multiplier: 5.0
+disc_lr_multiplier: 1.0
+max_noise_ratio: 2.0
 # disc_updates: 1
-min_lr: 1e-5
+min_lr: 1e-6
 half_lr: 25  # before 10
 train_gen_every: 1
-max_reg: 0.0001
-cycle_reg: 1.0
-identity_reg: 1e-5
-half_reg: 25
-irm_rel_wt: 1.0
+train_disc_every: 1
+train_smoother_every: 1
+max_reg: 1.0
+cycle_reg: 0.1
+identity_reg: 1e-4
+half_reg: 10
+irm_rel_wt: 10.0  # 1.0
 # tv_rel_wt: 1.0
 seed: 1498163
 # tv_order: 1
 # huber_k: 2.0
-reg_warmup: 5
+reg_warmup: 1
 train_dirs: [normal_mix]
 ood_dirs: [expon_mix]
 logdir: "."
@@ -27,9 +34,13 @@ init_expl: 0.5
 min_expl: 0.01
 half_expl: 10
 
-band_lam: 0.025
-band_lim: 100.0
+band_lam: 0.005
+band_lim: 3.0
 band_tgt: 0.0
+
+# penalty for discrminator
+disc_centering_weight: 1e-3
+disc_grad_penalty_weight: 10.0
 
 hydra:
     run:

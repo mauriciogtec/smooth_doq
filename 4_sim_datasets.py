@@ -31,26 +31,26 @@ def add_noise(
     d: bd.BinnedDistribution, cfg: DictConfig
 ) -> bd.BinnedDistribution:
 
+    b = cfg.env_block_size
     if cfg.multiplicate_overdispersion:
-        sigma = np.random.uniform(*cfg.od_sigma)
+        sigma = np.random.uniform(*cfg.od_sigma, (b, 1))
         d = nm.MultiplicativeDispersion(d, sigma)
     if cfg.rounding:
-        stride = np.random.choice(cfg.rounding_stride)
-        if stride > 1:
-            d = nm.RoundingNoise(d, stride)
+        stride = np.random.choice(cfg.rounding_stride, (b, ))
+        d = nm.RoundingNoise(d, stride)
     if cfg.negbin_background:
-        nr = np.random.uniform(*cfg.noise_ratio)
-        dc = np.random.uniform(*cfg.disp_coef)
+        nr = np.random.uniform(*cfg.noise_ratio, (b, 1, 1))
+        dc = np.random.uniform(*cfg.disp_coef, (b, 1))
         d = nm.NegBinBackgroundNoise(d, nr, dc)
 
     noise_profile = dict(
         multiplicative_noise=cfg.multiplicate_overdispersion,
-        od_sigma=sigma,
+        od_sigma=[float(s) for s in sigma],
         rounding=cfg.rounding,
-        rounding_stride=int(stride),
+        rounding_stride=[int(s) for s in stride],
         negbin_background=cfg.negbin_background,
-        noise_ratio=nr,
-        disp_coef=dc,
+        noise_ratio=[float(s) for s in nr],
+        disp_coef=[float(s) for s in dc],
     )
 
     return d, noise_profile

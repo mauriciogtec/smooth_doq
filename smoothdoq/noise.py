@@ -1,6 +1,7 @@
 import numpy as np
 from smoothdoq.binned import BinnedDistribution
 from numpy import ndarray
+from typing import Union
 
 # list of noise types
 # 1. rounding noise
@@ -13,16 +14,22 @@ class RoundingNoise(BinnedDistribution):
     """Adds rounding noise. It makes sure the support is not changed
     by rounding values towards the end of the interval."""
 
-    def __init__(self, distribution: BinnedDistribution, stride: int) -> None:
-        assert 1 < stride < 2 * distribution.n_bins + 1
+    def __init__(
+        self, distribution: BinnedDistribution, stride: Union[int, ndarray]
+    ) -> None:
+        # assert 1 < stride < 2 * distribution.n_bins + 1
         super().__init__(distribution.n_bins)
         self.distribution = distribution
-        self.stride = stride
+        if isinstance(stride, int):
+            self.stride = [stride] * self.distribution.batch_size
+        else:
+            self.stride = stride
         self.batch_size = self.distribution.batch_size
 
-    def target_bins(self) -> list:
+    def target_bins(self, w: int) -> list:
         target_bin = []
-        w = self.stride
+        # if not isinstance(w, list):
+        #     stride = [stride] * ?
         for i in range(self.n_bins):
             if i <= w // 2:
                 target_bin.append(0)
@@ -33,11 +40,11 @@ class RoundingNoise(BinnedDistribution):
         return target_bin
 
     def sample(self, size: int = 1, offset=None) -> ndarray:
-        N = self.n_bins
+        # N = self.n_bins
         tmp = self.distribution.sample(size)
-        targets = self.target_bins()
         out = np.zeros_like(tmp)
         for i in range(self.batch_size):
+            targets = self.target_bins(self.stride[i])
             for j in range(self.n_bins):
                 out[i, targets[j]] += tmp[i, j]
         return out
@@ -47,8 +54,10 @@ class MultiplicativeDispersion(BinnedDistribution):
     """Adds rounding noise. It makes sure the support is not changed
     by rounding values towards the end of the interval."""
 
-    def __init__(self, distribution: BinnedDistribution, sigma: float) -> None:
-        assert sigma > 0.0
+    def __init__(
+        self, distribution: BinnedDistribution, sigma: Union[ndarray, float]
+    ) -> None:
+        # assert sigma > 0.0
         super().__init__(distribution.n_bins)
         self.distribution = distribution
         self.sigma = sigma
@@ -91,11 +100,11 @@ class NegBinBackgroundNoise(BinnedDistribution):
     def __init__(
         self,
         distribution: BinnedDistribution,
-        noise_ratio: float,
-        disp_coef: float,
+        noise_ratio: Union[float, ndarray],
+        disp_coef: Union[float, ndarray],
     ) -> None:
-        assert 0.0 < noise_ratio < 1.0
-        assert disp_coef > 0.0
+        # assert 0.0 < noise_ratio < 1.0
+        # assert disp_coef > 0.0
         super().__init__(distribution.n_bins)
         self.distribution = distribution
         self.disp_coef = disp_coef
@@ -104,10 +113,16 @@ class NegBinBackgroundNoise(BinnedDistribution):
         self.pdf = self.distribution.pdf
 
     def sample(self, size: int = 1, adjust_size=True) -> ndarray:
-        N = self.n_bins
-        signal_size = np.random.binomial(size, 1.0 - self.noise_ratio)
-        signal = self.distribution.sample(signal_size)
-        mu = (size - signal_size) / self.n_bins
+        # N = self.n_bins
+        sr = self.noise_ratio
+        if isinstance(sr, float):
+            sr = [sr] * self.distribution.batch_size
+        signal = []
+        total = self.distribution.sample(size)
+        signal = np.zeros_like(total)
+        for j, s in enumerate(sr):
+            signal[j] = np.random.binomial(total[j], s)
+        mu = (total - signal) / self.n_bins
 
         if not adjust_size:
             r = self.disp_coef
@@ -119,12 +134,14 @@ class NegBinBackgroundNoise(BinnedDistribution):
             r = self.disp_coef
             # making mu larger implies that high probability will
             # oversample and then slim down
-            p = np.expand_dims(r / (r + 2 * mu), -1)
+            p = r / (r + 2 * mu)
+            if len(p.shape) == 1:
+                p = np.expand_dims(p, -1)
             background = np.random.negative_binomial(
                 r, p, (self.batch_size, self.n_bins)
             )
             for i in range(self.batch_size):
-                diff = (size - signal_size) - background[i].sum()
+                diff = (total[i] - signal[i]).sum() - background[i].sum()
                 sign = 1 if diff > 0 else -1
                 while diff != 0:
                     p = background[i] + 1e-14

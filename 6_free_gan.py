@@ -83,12 +83,13 @@ def main(cfg):
                 for record in batch:
                     data.append(record)
 
-    # for d in cfg.ood_dirs:
-    #     for fn in glob(f"{wd}/data/simulated/{d}/*.json"):
-    #         with open(fn, "r") as io:
-    #             batch = ujson.load(io)
-    #             for record in batch:
-    #                 ood_data.append(record)
+    ood_data = []
+    for d in cfg.ood_dirs:
+        for fn in glob(f"{wd}/data/simulated/{d}/*.json"):
+            with open(fn, "r") as io:
+                batch = ujson.load(io)
+                for record in batch:
+                    ood_data.append(record)
 
     training_data = data
     # [data[i] for i in range(9, int(0.9 * len(data)))]
@@ -183,13 +184,26 @@ def main(cfg):
         return gen_loss, cycle_loss, fake, disc, recon, idx
 
     @tf.function
-    def disc_train_step(logits_y, logits_x, fake, noise, train=True):
+    def disc_train_step(
+        logits_y, logits_x, fake, noise, gp_wt, c_wt, train=True
+    ):
         with tf.GradientTape() as tape:
             disc_fake = discriminator(fake, training=True)
             disc_real = discriminator(logits_x, training=True)
             disc_fake = tf.reduce_mean(disc_fake)
             disc_real = tf.reduce_mean(disc_real)
-            loss = disc_fake - disc_real
+            # center_reg = c_wt * (disc_fake + disc_real) ** 2
+
+            # gradient penalty for WGAN-GP
+            alpha = tf.random.uniform((fake.shape[0], 1))
+            inter = alpha * logits_x + (1.0 - alpha) * fake
+            with tf.GradientTape() as tape2:
+                tape2.watch(inter)
+                pred = discriminator(inter, training=True)
+            norm = tf.norm(tape2.gradient(pred, inter))
+            gp = tf.reduce_mean((norm - 1.0) ** 2)
+
+            loss = disc_fake - disc_real + gp_wt * gp + center_reg
 
         if train:
             grads = tape.gradient(loss, discriminator.trainable_variables)
@@ -197,7 +211,7 @@ def main(cfg):
                 zip(grads, discriminator.trainable_variables)
             )
 
-        return loss, disc_fake, disc_real
+        return loss, disc_fake, disc_real, gp
 
     @tf.function
     def smoother_train_step(fake, logits_x, y, mask, reg_wt, envs=1):
@@ -232,19 +246,32 @@ def main(cfg):
 
         return loss, irm_loss, yhat
 
+    @tf.function
+    def test_step(logits_x, y, mask):
+        logits_yhat = smoother(logits_x, training=False)
+        yhat = denoiser.masked_softmax(logits_yhat, mask, -1)
+        loss = kld(yhat, y) + kld(y, yhat)
+        loss = tf.reduce_mean(loss)
+        return loss, yhat
+
     step = 0
-    disc_loss_buff = []
+    fake_loss_buff = []
+    real_loss_buff = []
     gen_loss_buff = []
     cycle_loss_buff = []
     smooth_loss_buff = []
     irm_loss_buff = []
     idx_pmin_buff = []
+    gp_buff = []
+    ood_buff = []
     epochs = cfg.epochs
     plot_every = cfg.plot_every
     batch_size = cfg.batch_size
     envs = cfg.batch_size // cfg.env_block_size
     cr = cfg.cycle_reg
     ir = cfg.identity_reg
+    gp_wt = cfg.disc_grad_penalty_weight
+    c_wt = cfg.disc_centering_weight
 
     dfake_ma = 0.0
     dreal_ma = 0.0
@@ -266,7 +293,7 @@ def main(cfg):
             logits_y, logits_x, noise, x, y, mask = batch_data
 
             # update_gen = j % cfg.train_gen_every == 0
-            gen_loss, cycle_loss, fake, disc, cycle, idx = gen_train_step(
+            gen_loss, cycle_loss, fake, gen_disc, cycle, idx = gen_train_step(
                 logits_y, noise, x, y, mask, cr, ir, expl, train_gen
             )
             freqs = np.zeros(cfg.ensemble_size)
@@ -283,31 +310,36 @@ def main(cfg):
             smooth_loss_buff.append(float(smooth_loss))
             irm_loss_buff.append(float(irm_loss))
 
-            disc_loss, disc_fake, disc_real = disc_train_step(
-                logits_y, logits_x, fake, noise, train_disc
+            disc_loss, disc_fake, disc_real, gp = disc_train_step(
+                logits_y, logits_x, fake, noise, gp_wt, c_wt, train_disc
             )
             dfake_ma += cfg.band_lam * (disc_fake - dfake_ma)
             dreal_ma += cfg.band_lam * (disc_real - dreal_ma)
-            disc_loss_buff.append(float(disc_loss))
+            fake_loss_buff.append(float(disc_fake))
+            real_loss_buff.append(float(disc_real))
+            gp_buff.append(float(gp))
 
             # whether train disc/gen or not in next rounds to guarantee eq
-            if train_gen and dfake_ma - dreal_ma > cfg.band_lim:
+            if train_gen and (dfake_ma > dreal_ma or dfake_ma > cfg.band_lim):
                 train_gen = False
                 train_disc = True
                 msg = f"gen off dreal={dreal_ma:.2f}, dfake={dfake_ma:.2f}"
                 logger.write_message(msg)
-            elif not train_gen and dfake_ma - dreal_ma < cfg.band_tgt:
+            elif not train_gen and dreal_ma > 0 and dfake_ma < cfg.band_tgt:
                 train_gen = True
                 train_disc = True
                 msg = f"gen on dreal={dreal_ma:.2f}, dfake={dfake_ma:.2f}"
                 logger.write_message(msg)
-
-            if train_disc and dfake_ma - dreal_ma < - cfg.band_lim:
+            elif train_disc and dreal_ma > 0 and dfake_ma < -cfg.band_lim:
                 train_gen = True
                 train_disc = False
                 msg = f"disc off dreal={dreal_ma:.2f}, dfake={dfake_ma:.2f}"
                 logger.write_message(msg)
-            elif not train_disc and dfake_ma - dreal_ma > - cfg.band_tgt:
+            elif (
+                not train_disc
+                and dfake_ma < dreal_ma
+                and dfake_ma > -cfg.band_tgt
+            ):
                 train_gen = True
                 train_disc = True
                 msg = f"disc on dreal={dreal_ma:.2f}, dfake={dfake_ma:.2f}"
@@ -316,17 +348,24 @@ def main(cfg):
             if step % (plot_every // cfg.train_gen_every) == 0:
                 fn = f"{logdir}/images/{step:05d}.png"
                 pfake0 = denoiser.masked_softmax(fake[0], mask[0])
-                title = f"D = {float(disc[0]):.2f}"
+                title = f"D = {float(gen_disc[0]):.2f}"
                 plot_results(
                     *[u.numpy() for u in (y[0], yhat[0], pfake0)], title, fn
                 )
 
             step += 1
 
+        for batch_data in batches(ood_data, 4 * batch_size):
+            logits_y, logits_x, noise, x, y, mask = batch_data
+            ood_loss, yhat = test_step(logits_x, y, mask)
+            ood_buff.append(float(ood_loss))
+
         gen_loss = np.mean(gen_loss_buff)
         gen_loss_buff.clear()
-        disc_loss = np.mean(disc_loss_buff)
-        disc_loss_buff.clear()
+        fake_loss = np.mean(fake_loss_buff)
+        fake_loss_buff.clear()
+        real_loss = np.mean(real_loss_buff)
+        real_loss_buff.clear()
         cycle_loss = np.mean(cycle_loss_buff)
         cycle_loss_buff.clear()
         smooth_loss = np.mean(smooth_loss_buff)
@@ -335,14 +374,22 @@ def main(cfg):
         irm_loss_buff.clear()
         idx_pmin = np.mean(idx_pmin_buff)
         idx_pmin_buff.clear()
+        gp = np.mean(gp_buff)
+        gp_buff.clear()
+        ood = np.mean(ood_buff)
+        ood_buff.clear()
         logger.write_metric({"global_step": e, "loss/gen": gen_loss})
-        logger.write_metric({"global_step": e, "loss/disc": disc_loss})
+        logger.write_metric({"global_step": e, "loss/gp": gp})
+        logger.write_metric({"global_step": e, "loss/fake": fake_loss})
+        logger.write_metric({"global_step": e, "loss/real": real_loss})
         logger.write_metric({"global_step": e, "loss/cycle": cycle_loss})
         logger.write_metric({"global_step": e, "loss/smooth": smooth_loss})
         logger.write_metric({"global_step": e, "loss/irm": irm_loss})
         logger.write_metric({"global_step": e, "info/lr": lr})
         logger.write_metric({"global_step": e, "info/idx_pmin": idx_pmin})
         logger.write_metric({"global_step": e, "info/expl": expl})
+        logger.write_metric({"global_step": e, "info/reg_wt": reg_wt})
+        logger.write_metric({"global_step": e, "ood/ood": ood})
 
     step += 1
 
