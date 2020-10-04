@@ -1,0 +1,12 @@
+python ./6_free_gan_C.py hydra.run.dir=outputs/freegan_C/default
+python ./6_free_gan_C.py irm_rel_wt=10.0 half_reg=1
+python ./6_free_gan_C.py gen_norm_layers=true
+python ./6_free_gan_C.py max_reg=0.0
+python ./6_free_gan_C.py half_lr=5
+python ./6_free_gan_C.py cycle_reg=0.0
+python ./6_free_gan_C.py cycle_reg=1.0
+python ./6_free_gan_C.py batch_size=128
+python ./6_free_gan_C.py irm_rel_wt=0.0
+python ./6_free_gan_C.py irm_rel_wt=10.0
+python ./6_free_gan_C.py init_lr=5e-5
+python ./6_free_gan_C.py init_lr=5e-4 smooth_lr_multiplier=1

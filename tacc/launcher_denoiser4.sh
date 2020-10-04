@@ -2,8 +2,8 @@
 #SBATCH -A A-ib1
 #SBATCH -p rtx
 #SBATCH -t 4:0:0
-#SBATCH -N 3
-#SBATCH -n 12
+#SBATCH -N 2
+#SBATCH -n 4
 
 module load launcher_gpu
 module load intel/18
@@ -14,7 +14,7 @@ source $HOME/.bashrc
 conda activate ./sdoq
 
 export LAUNCHER_WORKDIR=`pwd`
-export LAUNCHER_JOB_FILE=$LAUNCHER_WORKDIR/tacc/gan_jobs.txt
+export LAUNCHER_JOB_FILE=$LAUNCHER_WORKDIR/tacc/denoiser_jobs4.txt
 export LAUNCHER_SCHED=interleaved
 
 $LAUNCHER_DIR/paramrun

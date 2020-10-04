@@ -1,0 +1,8 @@
+python ./5_train_simulated.py init_lr=1e-3 min_lr=1e-5 half_lr=50 irm_rel_wt=10 tv_rel_wt=0.0
+python ./5_train_simulated.py init_lr=1e-3 min_lr=1e-5 half_lr=5 irm_rel_wt=10  tv_rel_wt=0.0
+python ./5_train_simulated.py init_lr=1e-3 min_lr=1e-5 half_lr=50 irm_rel_wt=10 half_reg=5  tv_rel_wt=0.0
+python ./5_train_simulated.py init_lr=1e-3 min_lr=1e-5 half_lr=5 irm_rel_wt=10 half_reg=50  tv_rel_wt=0.0
+python ./5_train_simulated.py init_lr=1e-3 min_lr=1e-5 half_lr=50 irm_rel_wt=100  tv_rel_wt=0.0
+python ./5_train_simulated.py init_lr=1e-3 min_lr=1e-5 half_lr=5 irm_rel_wt=100  tv_rel_wt=0.0
+python ./5_train_simulated.py init_lr=1e-3 min_lr=1e-5 half_lr=50 irm_rel_wt=100 half_reg=5  tv_rel_wt=0.0
+python ./5_train_simulated.py init_lr=1e-3 min_lr=1e-5 half_lr=5 irm_rel_wt=100 half_reg=50  tv_rel_wt=0.0

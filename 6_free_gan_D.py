@@ -112,10 +112,10 @@ def main(cfg):
                 for record in batch:
                     ood_data.append(record)
 
-    training_data = [data[i] for i in range(9, int(0.9 * len(data)))]
+    training_data = [data[i] for i in range(int(0.9 * len(data)))]
     test_data = [data[i] for i in range(int(0.9 * len(data)), len(data))]
     ood_data = [
-        ood_data[i] for i in range(int(0.9 * len(ood_data)), len(ood_data))
+        ood_data[i] for i in range(int(0.9 * len(ood_data)))
     ]
 
     def batches(train_data, ood_data, batch_size):
@@ -135,17 +135,17 @@ def main(cfg):
     dilation_rate = [1] + [1, 2, 4, 8, 1, 1, 1, 1]
     strides = [1] + [2, 1, 1, 1, 2, 1, 1, 2]
 
-    generator = [
+    generator = Ensemble([
         gan.StructGAN(
             nblocks=nblocks,
             noise_pre_kernel_size=5,
             kernel_size=[7] * 6,
-            filters=cfg.generator_filters,
+            filters=cfg.gen_filters,
             dilation_rate=[1, 2, 4, 8, 1, 1],
-            normalization=True
+            normalization=cfg.gen_norm_layers
         )
         for _ in range(cfg.ensemble_size)
-    ]
+    ])
 
     discriminator = gan.Discriminator(
         nblocks=nblocks,
@@ -164,7 +164,7 @@ def main(cfg):
 
     # lr assigned inside the loop
     gen_opt = AdamW(1e-4, 1.0, beta_1=0.5, clipnorm=cfg.clipnorm)
-    disc_opt = AdamW(1e-4, 1.0, beta_1=0.1, clipnorm=cfg.clipnorm)
+    disc_opt = tf.optimizers.SGD(1.0, clipnorm=cfg.clipnorm)
     smooth_opt = AdamW(1e-4, 1.0, beta_1=0.1, clipnorm=cfg.clipnorm)
 
     @tf.function
@@ -185,11 +185,11 @@ def main(cfg):
         smo_loss = 0.0
         norm_loss = 0.0
         smo = 0.0
-        gid = tf.random.randint(cfg.ensemble_size)
+
 
         with tf.GradientTape() as tape:
-            # nmult, nadd = generator(logits_y, noise, training=True)
-            nadd = generator[gid](logits_y, noise, training=True)
+            nadd = generator(logits_y, noise, training=True)
+            nadd = tf.reduce_mean(nadd, 0)
             noise = mask * tf.tanh(nadd / C) * 2 * C
             logits_fake = logits_y + noise
             # fake = y * tf.sigmoid(nmult) # + tf.math.abs(nmult)
@@ -236,10 +236,10 @@ def main(cfg):
 
             loss += reg_wt * irm_loss
 
-        grads = tape.gradient(gen_loss, generator[gid].trainable_variables)
-
+        grads = tape.gradient(gen_loss, generator.trainable_variables)
         if train:
             gen_opt.apply_gradients(zip(grads, generator.trainable_variables))
+
 
         return gen_loss, smo_loss, fake, logits_fake, disc, smo, norm_loss
 
@@ -359,8 +359,10 @@ def main(cfg):
             train_smo = j % cfg.train_smoother_every == 0
 
             # update_gen = j % cfg.train_gen_every == 0
+            # gid = np.random.choice(range(cfg.ensemble_size))
+            # ie = (step == 0)  # initialize ensemble
             gen_loss, cycle_loss, fake, logits_fake, gen_disc, smo, norm_loss = gen_train_step(
-                noise, alpha, y, logits_y, mask, reg_wt, cr, expl, max_nr, train_gen
+                noise, alpha, y, logits_y, mask, reg_wt, cr, expl, max_nr, train_gen,
             )
 
             gen_loss_buff.append(float(gen_loss))

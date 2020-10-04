@@ -112,12 +112,11 @@ def main(cfg):
                 for record in batch:
                     ood_data.append(record)
 
-    training_data = data
-    # [data[i] for i in range(9, int(0.9 * len(data)))]
-    # test_data = [data[i] for i in range(int(0.9 * len(data)), len(data))]
-    # ood_data = [
-    #     ood_data[i] for i in range(int(0.9 * len(ood_data)), len(ood_data))
-    # ]
+    training_data = [data[i] for i in range(9, int(0.9 * len(data)))]
+    test_data = [data[i] for i in range(int(0.9 * len(data)), len(data))]
+    ood_data = [
+        ood_data[i] for i in range(int(0.9 * len(ood_data)))
+    ]
 
     def batches(train_data, ood_data, batch_size):
         N = len(train_data) // batch_size
@@ -162,7 +161,7 @@ def main(cfg):
 
     # lr assigned inside the loop
     gen_opt = AdamW(1e-4, 1.0, beta_1=0.5, clipnorm=cfg.clipnorm)
-    disc_opt = AdamW(1e-4, 1.0, beta_1=0.1, clipnorm=cfg.clipnorm)
+    disc_opt = AdamW(1e-4, 1.0, beta_1=0.01, clipnorm=cfg.clipnorm)
     smooth_opt = AdamW(1e-4, 1.0, beta_1=0.1, clipnorm=cfg.clipnorm)
 
     @tf.function
@@ -215,7 +214,7 @@ def main(cfg):
                 # norm_loss -= 0.01 * tf.math.log(norm_noise + 1e-10)
                 # d = tf.math.abs(norm_noise - 1.0)
                 # norm_loss = tf.where(d < 1.0, 0.5 * d**2, d - 0.5)
-                w_loss = gen_loss + max_reg * cycle_reg * smo_loss + norm_loss
+                w_loss = gen_loss + reg_wt * cycle_reg * smo_loss + norm_loss
 
             gen_loss = tf.reduce_mean(gen_loss)
             smo_loss = tf.reduce_mean(smo_loss)
@@ -322,6 +321,7 @@ def main(cfg):
     # idx_pmin_buff = []
     # gp_buff = []
     ood_buff = []
+    test_buff = []
     epochs = cfg.epochs
     plot_every = cfg.plot_every
     batch_size = cfg.batch_size
@@ -429,6 +429,11 @@ def main(cfg):
 
             od_step += 1
 
+        for batch_data in batches(test_data, test_data, batch_size):
+            logits_y, logits_x, noise, alpha, x, y, mask, mask_x = batch_data
+            test_loss, yhat = test_step(logits_x, y, mask)
+            test_buff.append(float(test_loss))
+
         gen_loss = np.mean(gen_loss_buff)
         gen_loss_buff.clear()
         fake_loss = np.mean(fake_loss_buff)
@@ -448,7 +453,9 @@ def main(cfg):
         # # gp = np.mean(gp_buff)
         # gp_buff.clear()
         ood = np.mean(ood_buff)
-        # ood_buff.clear()
+        ood_buff.clear()
+        test = np.mean(test_buff)
+        test_buff.clear()
         logger.write_metric({"global_step": e, "loss/gen": gen_loss})
         # logger.write_metric({"global_step": e, "loss/gp": gp})
         logger.write_metric({"global_step": e, "loss/fake": fake_loss})
@@ -462,6 +469,7 @@ def main(cfg):
         logger.write_metric({"global_step": e, "info/expl": expl})
         logger.write_metric({"global_step": e, "info/reg_wt": reg_wt})
         logger.write_metric({"global_step": e, "ood/ood": ood})
+        logger.write_metric({"global_step": e, "ood/test": test})
 
     # step += 1
 

@@ -150,17 +150,13 @@ class ResBlock1D_2(models.Model):
         # block 3
         # self.ln3 = MaskedLayerNorm()
         self.ln2 = tf.keras.layers.LayerNormalization()
-        self.conv2 = []
-        for i in range(4):
-            self.conv2.append(
-                tf.keras.layers.Conv1D(
-                    filters // 4,
-                    kernel_size + i * 2,
-                    dilation_rate=dilation_rate,
-                    padding="same",
-                    use_bias=use_bias,
-                )
-            )
+        self.conv2 = tf.keras.layers.Conv1D(
+            filters,
+            kernel_size,
+            dilation_rate=dilation_rate,
+            padding="same",
+            use_bias=use_bias,
+        )
 
     def call(self, inputs, training=None) -> Tensor:
         x = inputs
@@ -171,7 +167,7 @@ class ResBlock1D_2(models.Model):
         if not self.use_bias:
             x = self.ln2(x, training=training)
         x = self.act(x)
-        x = tf.concat([layer(x) for layer in self.conv2], -1)
+        x = self.conv2(x)
 
         shortcut = inputs
         if self.conv_skip:
@@ -195,3 +191,6 @@ class Ensemble(models.Model):
     def call(self, *args, **kwargs) -> Any:
         outputs = [m(*args, **kwargs) for m in self.models]
         return tf.stack(outputs, self.stack_dim)
+
+    def call_at(self, i: int, *args, **kwargs):
+        return self.models[i](*args, **kwargs)

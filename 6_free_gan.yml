@@ -1,4 +1,4 @@
-epochs: 150
+epochs: 300
 gen_filters: 64
 gen_norm_layers: True
 ensemble_size: 1
@@ -21,12 +21,12 @@ max_reg: 1.0
 cycle_reg: 0.1
 identity_reg: 1e-4
 half_reg: 10
-irm_rel_wt: 10.0  # 1.0
+irm_rel_wt: 1.0  # 1.0
 # tv_rel_wt: 1.0
 seed: 1498163
 # tv_order: 1
 # huber_k: 2.0
-reg_warmup: 1
+reg_warmup: 0
 train_dirs: [normal_mix]
 ood_dirs: [expon_mix]
 logdir: "."
@@ -44,7 +44,7 @@ disc_grad_penalty_weight: 10.0
 
 hydra:
     run:
-        dir: "outputs/freegan/${hydra.job.override_dirname}"
+        dir: "outputs/freegan_C/${hydra.job.override_dirname}"
     job_logging:
         formatters:
             simple:
