@@ -1,34 +1,43 @@
 epochs: 300
-replay_capacity: 32_000
-replay_blocks: 0
+use_replay: false
+replay_capacity: 20_000
 gen_filters: 32
-gen_norm_layers: True
+gen_norm_layers: true
+gen_dropout: false
 ensemble_size: 1
 ckpt_every: 50
 batch_size: 64
+replay_blocks: 2
 env_block_size: 32  # important for irm
-plot_every: 50
+plot_every: 100
 clipnorm: 3.0
-init_lr: 5e-4
+init_lr: 1e-4
+half_lr_every: 10
+half_power: 0.75
+smooth_init_lr: 4e-4
+smooth_batch_size: 32
+smooth_train_steps: 1
+smooth_half_lr_every: 25
 smooth_lr_multiplier: 1.0
 disc_lr_multiplier: 1.0
-max_noise_ratio: 2.0
+max_noise_ratio: 1.0
 # disc_updates: 1
 min_lr: 1e-6
-half_lr: 25  # before 10
+half_lr: 0.00001  # before 10
 train_gen_every: 1
 train_disc_every: 1
 train_smoother_every: 1
-max_reg: 1.0
+max_reg: 0.000
 cycle_reg: 0.1
+norm_reg: 0.0001
 identity_reg: 1e-4
-half_reg: 10
-irm_rel_wt: 1.0  # 1.0
+half_reg: 1000.0
+irm_rel_wt: 1.0
 # tv_rel_wt: 1.0
 seed: 1498163
 # tv_order: 1
 # huber_k: 2.0
-reg_warmup: 0
+reg_warmup: 1
 train_dirs: [normal_mix]
 ood_dirs: [expon_mix]
 logdir: "."
@@ -46,7 +55,7 @@ disc_grad_penalty_weight: 10.0
 
 hydra:
     run:
-        dir: "outputs/freegan_E2/${hydra.job.override_dirname}"
+        dir: "outputs/freegan_F/${hydra.job.override_dirname}"
     job_logging:
         formatters:
             simple:

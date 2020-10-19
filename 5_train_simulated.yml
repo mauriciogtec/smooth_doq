@@ -1,20 +1,22 @@
-epochs: 300
+epochs: 100
+balanced: true
 ckpt_every: 50
-batch_size: 64
-env_block_size: 16  # important for irm
+batch_size: 32
+env_block_size: 32  # important for irm
 plot_every: 100
 clipnorm: 3.0
-init_lr: 1e-4
-min_lr: 1e-5
-half_lr: 50  # before 10
-max_reg: 0.0
-half_reg: 25
-irm_rel_wt: 1.0
-tv_rel_wt: 1.0
+init_lr: 0.001
+min_lr: 1.0e-06
+lr_split: 10
+half_lr: 1000
+max_reg: 1.0
+half_reg: 0.01
+irm_rel_wt: 0.0  # 100.0
+tv_rel_wt: 0.0
 seed: 1498163
 tv_order: 1
 huber_k: 2.0
-reg_warmup: 5
+reg_warmup: 0
 train_dirs: [normal_mix]
 ood_dirs: [expon_mix]
 logdir: "."

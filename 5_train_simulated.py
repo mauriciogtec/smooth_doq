@@ -72,6 +72,23 @@ def kld(y, yhat, eps=1e-6):
     return loss
 
 
+def jsd(y, yhat, eps=1e-6):
+    return kld(y, yhat, eps) + kld(yhat, y, eps)
+
+
+def huber(x, k=1.0):
+    d = tf.math.abs(x)
+    return tf.where(d < k, 0.5 * d ** 2, k * (d - 0.5 * k))
+
+
+def w1(y, yhat, mask, k):
+    y_cum = tf.math.cumsum(y, -1)
+    yhat_cum = tf.math.cumsum(yhat, -1)
+    delta = huber(y_cum - yhat_cum, 0.01)
+    B = tf.reduce_sum(mask, -1)  # num bins
+    return tf.math.reduce_sum(delta, -1) / B
+
+
 def tvloss(z, k=1.0, order=2):
     d = z
     for i in range(order + 1):
@@ -100,7 +117,7 @@ def kde(x, mask, bw=None, bw_factor=1.0, silverman=False):
         # estimate mean and stdev
         mean = np.sum(xtilde * x / N)
         sumsq = np.sum(xtilde ** 2 * x / N)
-        std = np.sqrt(sumsq - mean ** 2)
+        std = np.sqrt(sumsq - mean ** 2) + 0.01
         if not silverman:
             h = 1.06 * std * N ** (-0.2)
         else:
@@ -163,7 +180,12 @@ def main(cfg):
             with open(fn, "r") as io:
                 batch = ujson.load(io)
                 for record in batch:
-                    data.append(record)
+                    n_comps = record["n_comps"]
+                    # bias
+                    if cfg.balanced:
+                        data.append(record)
+                    elif np.random.rand() < 1.0 / n_comps:
+                        data.append(record)
 
     for d in cfg.ood_dirs:
         for fn in glob(f"{wd}/data/simulated/{d}/*.json"):
@@ -185,10 +207,11 @@ def main(cfg):
             batch = [data[k] for k in idx]
             yield preprocess_batch(batch, training=training)
 
-    nblocks = 8
-    kernel_size = [3] + [3] * nblocks
-    filters = 64
-    dilation_rate = [1] + [1, 2, 4, 8, 1, 1, 1, 1]
+    nblocks = 2
+    # kernel_size = [7] + [7] * nblocks
+    kernel_size = [21, 3, 7]  # + [7] * nblocks
+    filters = 128
+    dilation_rate = [1, 8, 1] #+ [1, 2, 4, 8, 1, 1, 1, 1]
 
     model = denoiser.BinDenoiser(
         nblocks=nblocks,
@@ -199,7 +222,7 @@ def main(cfg):
     )
 
     init_lr = cfg.init_lr
-    optimizer = tf.optimizers.Adam(init_lr, clipnorm=cfg.clipnorm)
+    optimizer = tf.optimizers.Adam(init_lr, beta_1=0.5, clipnorm=cfg.clipnorm)
 
     @tf.function
     def train_step(
@@ -213,23 +236,26 @@ def main(cfg):
         training=True,
     ):
         with tf.GradientTape() as tape:
-            w_dummy = tf.constant(1.0)
+            w_dummy = tf.ones((1, 400))
             logits_yhat = model(logits_x, training=training, mask=mask)
             with tf.GradientTape() as tape2:
                 tape2.watch(w_dummy)
-                yhat = denoiser.masked_softmax(w_dummy * logits_yhat, mask, -1)
-                loss_vec = kld(yhat, y) + kld(y, yhat)
+                yhat = w_dummy * denoiser.masked_softmax(logits_yhat, mask, -1)
+                # loss_vec = kld(yhat, y) + kld(y, yhat)
+                loss_vec = 1e2 * w1(yhat, y, mask, k=0.1)  + jsd(yhat, y)
             # irm loss
             g = tape2.jacobian(loss_vec, w_dummy)
             irm_loss = 0.0
             for g_e in tf.split(g, envs, 0):
-                g1 = tf.reduce_mean(g_e[::2])
-                g2 = tf.reduce_mean(g_e[1::2])
-                irm_loss += g1 * g2 + (0.5 * (g1 + g2))**2
+                g1 = tf.reduce_mean(g_e[::2], 0)
+                g2 = tf.reduce_mean(g_e[1::2], 0)
+                sample_size = tf.reduce_sum(mask[0], -1)
+                irm_loss += tf.reduce_sum(g1 * g2) / sample_size
+
             tv_reg = tvloss(logits_yhat, k=cfg.huber_k, order=cfg.tv_order)
             # logits_yhat = model(logits_x, training=training, mask=mask)
-            yhat = denoiser.masked_softmax(logits_yhat, mask, -1)
-            loss_vec = kld(yhat, y) + kld(y, yhat)
+            # yhat = denoiser.masked_softmax(logits_yhat, mask, -1)
+            # loss_vec = kld(yhat, y) + kld(y, yhat)
             loss = tf.reduce_mean(loss_vec)
             total_loss = loss + reg_wt * (
                 tv_rel_wt * tv_reg + irm_rel_wt * irm_loss
@@ -247,14 +273,27 @@ def main(cfg):
     def test_step(logits_x, y, mask):
         logits_yhat = model(logits_x, training=False, mask=mask)
         yhat = denoiser.masked_softmax(logits_yhat, mask, -1)
-        loss = kld(yhat, y) + kld(y, yhat)
+        loss = jsd(y, yhat)
         loss = tf.reduce_mean(loss)
-        return loss, yhat
+        true_qs = tf.math.cumsum(y, -1)
+        hat_qs = tf.math.cumsum(yhat, -1) 
+        delta = tf.math.abs(true_qs - hat_qs)
+        Ns = tf.reduce_sum(mask, -1)
+        qs_loss = tf.reduce_mean(tf.reduce_sum(delta, -1) / Ns)
+        qmax_loss = tf.reduce_mean(tf.reduce_max(delta, -1))
+        return loss, yhat, qs_loss, qmax_loss
 
     step = 0
     loss_buff = []
     reg_buff = []
     test_loss_buff = []
+    w1_test_loss_buff = []
+    ood_kde_qs_buff = []
+    ood_qs_buff = []
+    ood_kde_qmax_buff = []
+    ood_qmax_buff = []
+    raw_qmax_buff = []
+    raw_qs_buff = []
     ood_buff, ood_kde_buff, ood_kde2_buff, ood_kdeS_buff = [], [], [], []
     irm_buff = []
     epochs = cfg.epochs
@@ -265,14 +304,17 @@ def main(cfg):
     for e in range(epochs):
         rate = np.exp(-e * np.log(2) / cfg.half_lr)
         lr = cfg.min_lr + (cfg.init_lr - cfg.min_lr) * rate
+        lr = cfg.init_lr *  (0.5 ** (e // cfg.lr_split))
+
         e0 = max(e - cfg.reg_warmup, 0)
         reg_wt = cfg.max_reg * (1.0 - np.exp(- e0 * np.log(2) / cfg.half_reg))
         optimizer.lr.assign(lr)
 
-        for test_batch_data in batches(4 * test_data, batch_size, False):
+        for test_batch_data in batches(test_data, batch_size, False):
             logits_x, x, logits_y, y, mask = test_batch_data
-            loss, yhat = test_step(logits_x, y, mask)
+            loss, yhat, w1_loss, qmax_loss = test_step(logits_x, y, mask)
             test_loss_buff.append(float(loss))
+            w1_test_loss_buff.append(float(w1_loss))
 
         for batch_data in batches(training_data, batch_size, False):
             logits_x, x, logits_y, y, mask = batch_data
@@ -298,15 +340,17 @@ def main(cfg):
         ood_plot_example = np.random.randint(len(ood_data))
         j = 0
 
-        for batch_data in batches(ood_data, 4 * batch_size, False):
+  
+        for batch_data in batches(ood_data, batch_size, False):
             logits_x, x, logits_y, y, mask = batch_data
-            loss, yhat = test_step(logits_x, y, mask)
+            loss, yhat, qs_loss, qmax_loss = test_step(logits_x, y, mask)
             ood_buff.append(float(loss))
+            ood_qs_buff.append(float(qs_loss))
+            ood_qmax_buff.append(float(qmax_loss))
 
             if e == 0:
                 y_kde = [
-                    kde(xi.numpy(), mi.numpy())
-                    for xi, mi in zip(x, mask)
+                    kde(xi.numpy(), mi.numpy()) for xi, mi in zip(x, mask)
                 ]
                 y_kde2 = [
                     kde(xi.numpy(), mi.numpy(), bw_factor=5.0)
@@ -322,9 +366,29 @@ def main(cfg):
                 kde_loss = tf.reduce_mean(kld(y_kde, y) + kld(y, y_kde))
                 kde2_loss = tf.reduce_mean(kld(y_kde2, y) + kld(y, y_kde2))
                 kdeS_loss = tf.reduce_mean(kld(y_kdeS, y) + kld(y, y_kdeS))
+
+                true_qs = tf.math.cumsum(y, -1)
+                hat_qs = tf.math.cumsum(y_kde, -1) 
+                delta = tf.math.abs(true_qs - hat_qs)
+                Ns = tf.reduce_sum(mask, -1)
+                kde_qs_loss = tf.reduce_mean(tf.reduce_sum(delta, -1) / Ns)
+                kde_qmax_loss = tf.reduce_mean(tf.reduce_max(delta, -1))
+
+                ood_kde_qs_buff.append(float(kde_qs_loss))
+                ood_kde_qmax_buff.append(float(kde_qmax_loss))
                 ood_kde_buff.append(float(kde_loss))
                 ood_kde2_buff.append(float(kde2_loss))
                 ood_kdeS_buff.append(float(kdeS_loss))
+
+                # compare to raw
+                xhat = (x + 1e-6) / (tf.reduce_sum(x, -1, keepdims=True) + 1e-6)
+                hat_qs = tf.math.cumsum(xhat, -1) 
+                delta = tf.math.abs(true_qs - hat_qs)
+                Ns = tf.reduce_sum(mask, -1)
+                raw_qs_loss = tf.reduce_mean(tf.reduce_sum(delta, -1) / Ns)
+                raw_qmax_loss = tf.reduce_mean(tf.reduce_max(delta, -1))
+                raw_qs_buff.append(float(raw_qs_loss))
+                raw_qmax_buff.append(float(raw_qmax_loss))
 
             for r in range(x.shape[0]):
                 if j == ood_plot_example:  # print at random
@@ -339,11 +403,16 @@ def main(cfg):
         irm_loss = np.mean(irm_buff)
         logger.write_metric({"global_step": e, "loss/train": train_loss})
         logger.write_metric(
-            {"global_step": e, "loss/test": np.mean(test_loss_buff)}
+            {"global_step": e, "loss/test_jld": np.mean(test_loss_buff)}
+        )
+        logger.write_metric(
+            {"global_step": e, "loss/test_w1": np.mean(w1_test_loss_buff)}
         )
         logger.write_metric({"global_step": e, "loss/tv": tv_loss})
         logger.write_metric({"global_step": e, "loss/irm": irm_loss})
         logger.write_metric({"global_step": e, "ood/sdoq": np.mean(ood_buff)})
+        logger.write_metric({"global_step": e, "ood/sdoq_qs": np.mean(ood_qs_buff)})
+        logger.write_metric({"global_step": e, "ood/sdoq_qmax": np.mean(ood_qmax_buff)})
         logger.write_metric(
             {"global_step": e, "ood/kde": np.mean(ood_kde_buff)}
         )
@@ -352,6 +421,18 @@ def main(cfg):
         )
         logger.write_metric(
             {"global_step": e, "ood/kdeS": np.mean(ood_kdeS_buff)}
+        )
+        logger.write_metric(
+            {"global_step": e, "ood/kde_qs": np.mean(ood_kde_qs_buff)}
+        )
+        logger.write_metric(
+            {"global_step": e, "ood/kde_qmax": np.mean(ood_kde_qmax_buff)}
+        )
+        logger.write_metric(
+            {"global_step": e, "ood/raw_qs": np.mean(raw_qs_buff)}
+        )
+        logger.write_metric(
+            {"global_step": e, "ood/raw_qmax": np.mean(raw_qmax_buff)}
         )
         logger.write_metric({"global_step": e, "info/step": step})
         logger.write_metric({"global_step": e, "info/lr": lr})
@@ -367,7 +448,12 @@ def main(cfg):
 
         loss_buff, test_loss_buff = [], []
         reg_buff, irm_buff = [], []
-        ood_buff = []
+        ood_buff.clear()
+        ood_qmax_buff.clear()
+        # raw_qs_buff.clear()
+        # raw_qmax_buff.clear()
+        w1_test_loss_buff.clear()
+        # ood_kde_qs_buff.clear()
     
         model.save_weights(f"{logdir}/ckpt.h5")
         if e + 1 % cfg.ckpt_every == 0:

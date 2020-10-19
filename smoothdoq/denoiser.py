@@ -18,7 +18,7 @@ class BinDenoiser(models.Model):
         nblocks: int = 1,
         kernel_size: Union[int, List[int]] = 1,
         filters: Union[int, List[int]] = 32,
-        dilation_rate: Union[int, List[int]] = 32,
+        dilation_rate: Union[int, List[int]] = 1,
         alpha: float = 0.5,
         activation: str = "elu",
         dropout: float = 0.0,
@@ -113,10 +113,12 @@ def compute_mask(x: List[List], maxlen: Optional[int] = None) -> Tensor:
 
 if __name__ == "__main__":
 
-    nblocks = 5
-    kernel_size = [5, 3, 3, 3, 3]
-    filters = 16
-    dilation_rate = [1, 1, 2, 4, 8]
+    nblocks = 2
+    # kernel_size = [7] + [7] * nblocks
+    kernel_size = [21, 3, 7]  # + [7] * nblocks
+    filters = 128
+    dilation_rate = [1, 8, 1] #+ [1, 2, 4, 8, 1, 1, 1, 1]
+
 
     model = BinDenoiser(
         nblocks=nblocks,
