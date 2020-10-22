@@ -458,7 +458,7 @@ def main(cfg):
         if train:
             gen_opt.apply_gradients(zip(grads, gen_vars))
 
-        return loss, smo2noi, recon_noi
+        return loss, smo2noi, recon_smo, recon_noi
 
     @tf.function
     def disc_train_step(logits_x, logits_y, train=True):
@@ -626,9 +626,9 @@ def main(cfg):
 
             if step % plot_every == 0:
                 fn = f"{logdir}/images/{step:05d}_translate.png"
-                fake = denoiser.masked_softmax(logits_fake, mask_y)[0]
-                psmo = denoiser.masked_softmax(recon_smo, mask_y)[0]
-                pnoi = denoiser.masked_softmax(recon_smo, mask_y)[0]
+                fake = denoiser.masked_softmax(tf.squeeze(logits_fake, -1), mask_y)[0]
+                psmo = denoiser.masked_softmax(tf.squeeze(recon_smo, -1), mask_y)[0]
+                pnoi = denoiser.masked_softmax(tf.squeeze(recon_noi, -1), mask_y)[0]
                 # title = f"D={preal:.2f}, nr={float(alpha[0]):.2f}"
                 title = ""
                 plot_translate_results(
