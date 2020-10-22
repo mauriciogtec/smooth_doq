@@ -360,7 +360,7 @@ def main(cfg):
             loss_style = tf.reduce_mean(loss_style_noi + loss_style_smo, -1)
             loss_cross = loss_content + loss_style
 
-            loss = tf.reduce_mean(10 * loss_recon + loss_cross)
+            loss = tf.reduce_mean(loss_recon + loss_cross)
 
         gen_vars = (
             content_enc_noi.trainable_variables
@@ -434,7 +434,7 @@ def main(cfg):
             loss_style = tf.reduce_mean(loss_style_noi + loss_style_smo, -1)
             loss_disc = tf.squeeze(loss_disc_noi + loss_disc_smo, -1)
             loss = (
-                10 * loss_recon
+                loss_recon
                 + 1 * loss_content
                 + 1 * loss_style
                 + 1 * loss_disc

@@ -14,7 +14,7 @@ batch_size: 64
 replay_blocks: 2
 env_block_size: 32  # important for irm
 plot_every: 100
-clipnorm: 3.0
+clipnorm: 10.0
 init_lr: 5e-4
 half_lr_every: 10
 half_power: 0.75
