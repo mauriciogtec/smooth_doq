@@ -165,51 +165,61 @@ class StructGAN(models.Model):
         return nadd
 
 
+
 class MunitGAN(models.Model):
     def __init__(
         self,
-        nblocks: int = 1,
-        kernel_size_enc: List[int] = [1],
-        filters_enc: List[int] = [32],
-        kernel_size_dec: List[int] = [1],
-        filters_dec: List[int] = [32],
-        strides_style: List[int] = [2],
-        latent_units: int = 30,
-        activation: str = "leaky_relu"
+        enc_kernel_size: List[int] = [3],
+        enc_filters: List[int] = [32],
+        dec_kernel_size: List[int] = [1],
+        dec_filters: List[int] = [32],
+        style_kernel_size: List[int] = [3],
+        style_strides: List[int] = [2],
+        style_filters: List[int] = [32],
+        mlp_units: List[int] = [2],
+        activation: str = "gelu"
     ) -> None:
         super(MunitGAN, self).__init__()
 
-        self.filters_out = filters[-1]
+        self.content_enc_blocks = []
+        self.style_enc_blocks = []
+        self.dec_blocks = []
+        self.style_mlp_blocks
 
-        self.content_blocks = []
-        self.style_blocks = []
-        self.decoder_blocks = []
-
-        for k, f, s in zip(kernel_size_enc, filters_enc, strides_style):
-            new_block = ResBlock1D_2(
+        enc_blocks = []
+        for k, f in zip(enc_kernel_size, enc_filters):
+            blk = ResBlock1D_2(
                 kernel_size=k,
                 filters=f,
                 activation=activation,
-                norm='in'
+                norm='in',
+                add=True
             )
-            new_block_style = ResBlock1D_2(
-                kernel_size=k,
-                filters=f,
-                activation=activation,
-                strides=s,
-                norm='none'
-            )
-            self.content_blocks.append(new_block)
-            self.style_blocks.append(new_block_style)
+            enc_blocks.append(enc_blocks)
+        self.enc_blocks = tf.keras.Sequential(*enc_blocks)
 
-        for k, f in zip(kernel_size_dec, filters_dec):
-            new_block = ResBlock1D_2(
+        style_blocks = []
+        for k, f, s in zip(style_kernel_size, style_filters, style_strides):
+            blk = ResBlock1D_2(
                 kernel_size=k,
                 filters=f,
                 activation=activation,
-                norm='in'
+                norm='none',
+                add=True
             )
-            self.decoder_blocks.append(new_block)
+            style_blocks.append(enc_blocks)
+        self.style_blocks = tf.keras.Sequential(*style_blocks)
+
+        mlp_blocks = []
+        for u in mlp_units:
+            blk = tf.keras.layers.Dense(
+                units=u,
+                activation=activation,
+            )
+            mlp_blocks.append(blk)
+        self.mlp_blocks = tf.keras.Sequential(*mlp_blocks)
+
+
         output_layer = tf.keras.layers.Conv1D(
             kernel_size=1, filters=1, padding='same', use_bias=True
         )
@@ -256,7 +266,7 @@ class Discriminator(models.Model):
         filters: Union[int, List[int]] = 32,
         dilation_rate: Union[int, List[int]] = 32,
         strides: Union[int, List[int]] = 1,
-        activation: str = "elu",
+        activation: str = "leaky_relu",
         global_pool_mean: bool = True,
         **kwargs
     ) -> None:

@@ -1,7 +1,6 @@
 name: sdoq
 channels:
 - defaults
-- anaconda
 - conda-forge
 dependencies:
     - python=3.7
@@ -16,9 +15,8 @@ dependencies:
     - flake8
     - tqdm
     - openssl=1.1.1
-    - tensorflow-gpu=2.1
-    - h5py=2.9.0
     - pip:
+        - tensorflow-gpu=2.3
         - "git+https://git@github.com/facebookresearch/hydra@v1.0.0"
         - "git+https://git@github.com/shagunsodhani/ml-logger.git@master#egg=ml_logger[all]"
-        - tensorflow-addons==0.9.1
+        - tensorflow-addons
